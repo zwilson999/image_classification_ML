@@ -57,8 +57,9 @@ def display_summary_stats(features: np.ndarray, labels: np.ndarray, batch_id: in
     for key, value in label_counts.items():
         print('Label Counts of [{}]({}) : {}'.format(key, label_names[key].upper(), value))
     
-    sample_image = features[sample_id - 1]
-    sample_label = labels[sample_id - 1]
+    sample_image = features[sample_id]
+    print(features[sample_id-1])
+    sample_label = labels[sample_id]
     
     print('\nExample of Image {}:'.format(sample_id))
     print('Image - Min Value: {} Max Value: {}'.format(sample_image.min(), sample_image.max()))
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument('-batch_id', required = False, type = int,
                         help = 'The batch ID you want to visualize a sample from. Expecting numbers 1 - 6. 6 indicates test_batch file')
     parser.add_argument('-sample_id', required = False, type = int,
-                        help = 'The sample ID that you want to visualize. Expecting number between 0 - 10000.')
+                        help = 'The sample ID that you want to visualize. Expecting number between 0 - 9999.')
     args = parser.parse_args()
     
     if args.batch_id is not None:
@@ -91,7 +92,7 @@ if __name__ == "__main__":
         pass
 
     if args.sample_id is not None and args.batch_id is not None:
-        if 1 <= args.sample_id <= len(features):
+        if 0 <= args.sample_id < len(features):
             sample_id = args.sample_id
             display_summary_stats(features, labels, args.batch_id, sample_id)
         else:
