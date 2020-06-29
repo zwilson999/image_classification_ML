@@ -88,7 +88,7 @@ def create_master_data(xtrain_df: pd.DataFrame, ytrain_df: pd.DataFrame, xtest_d
     # combine all data frames into master
     train_frames = [xtrain_df, ytrain_df]
     train_df = pd.concat(train_frames, axis = 1, sort = False) # like an outer join (left to right)
-    #print(train_df.iloc[[0,25689]])
+    #print(train_df.iloc[[0,25689]]) # can validate these using cifar_10_summary_stats.py, e.g. 25689, you would use summary_stats and search batch_id = 3, sample_id = 5689
 
     test_frames = [x_test_df, y_test_df]
     test_df = pd.concat(test_frames, axis = 1, sort = False) # like an outer join (left to right)
@@ -134,6 +134,8 @@ def tSNE_image(master_data: pd.DataFrame, n_rows_selected: int, n_iterations: in
         
         time_start = time()
         tsne = TSNE(n_components = n_components, init = 'random', random_state = 0, perplexity = perplexity, learning_rate = learning_rate)
+        print("Starting t-SNE on {} images now!".format(n_rows_selected))
+        print("Parameters are perplexity = {}, learning rate = {}, number of iterations = {}".format(perplexity, learning_rate, n_iterations))
         y = tsne.fit_transform(X)
         time_end = time()
         print("Perplexity = %d completed in %.2g sec" % (perplexity, time_end - time_start))
@@ -170,12 +172,13 @@ if __name__ == "__main__":
     #print(x_train_df.head())
     #print(y_train_df.head())
 
-    master_data_df = create_master_data(x_train_df, y_train_df, x_test_df, y_test_df)
+    # master_data_df = create_master_data(x_train_df, y_train_df, x_test_df, y_test_df)
 
-    perplexities = [5, 30, 50, 100]
+    # perplexities = [5, 30, 50, 100]
 
-    #the filepath where you want to save plots to on your local machine
-    plot_output_path = Path("../data/processed/tSNE_plots").resolve()
+    # #the filepath where you want to save plots to on your local machine
+    # plot_output_path = Path("../data/processed/tSNE_plots").resolve()
 
-    # run tSNE and save plots to output path
-    tSNE_image(master_data_df, 100, 4000, perplexities, 200, plot_output_path, 2)
+    # # run tSNE and save plots to output path
+
+    # tSNE_image(master_data_df, 5000, 5000, perplexities, 200, plot_output_path, 2)
