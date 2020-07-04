@@ -68,9 +68,14 @@ def display_summary_stats(features: np.ndarray, labels: np.ndarray, batch_id: in
     
     plt.imshow(sample_image)
     plt.show()
+    # plot first 9 images
+    for i in range(9):
+        plt.subplot(330 + 1 + i)
+        plt.imshow(features[i])
+    plt.show()
 
 
-if __name__ == "__main__":
+def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-batch_id', required = False, type = int,
@@ -99,3 +104,6 @@ if __name__ == "__main__":
             exit("Expecting sample_id number between 1 and 10000 (inclusive). The number you supplied was {}.".format(args.sample_id))
     else:
         pass
+
+if __name__ == "__main__":
+    main()
