@@ -180,31 +180,31 @@ def train_evaluate_model(batch_size: int, num_epochs: int):
     print('Validation data shape: ', X_val.shape)
     print('Validation labels shape: ', y_val.shape)
 
-    # # normalize CIFAR data
-    # X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
+    # normalize CIFAR data
+    X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
 
-    # # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
-    # import tensorflow as tf
-    # physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    # assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-    # config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
+    import tensorflow as tf
+    physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-    # """
-    # training below here
-    # """
-    # # build the model with proper architecture
-    # CNN_model = build_cnn_model()
+    """
+    training below here
+    """
+    # build the model with proper architecture
+    CNN_model = build_cnn_model()
 
-    # # train the model with validation data to fine tune parameters
-    # history = CNN_model.fit(X_train, y_train, epochs = num_epochs, batch_size = batch_size, validation_data = (X_val, y_val))
+    # train the model with validation data to fine tune parameters
+    history = CNN_model.fit(X_train, y_train, epochs = num_epochs, batch_size = batch_size, validation_data = (X_val, y_val))
 
-    # # evaluate model on test set
-    # test_error, test_accuracy = CNN_model.evaluate(X_test, y_test)
-    # print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
+    # evaluate model on test set
+    test_error, test_accuracy = CNN_model.evaluate(X_test, y_test)
+    print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
 
-    # plot_history(history)
-    # CNN_model.save(SAVE_MODEL_PATH)
-    # CNN_model.summary()
+    plot_history(history)
+    CNN_model.save(SAVE_MODEL_PATH)
+    CNN_model.summary()
 
 def main():
     parser = argparse.ArgumentParser()
