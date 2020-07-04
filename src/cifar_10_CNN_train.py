@@ -52,7 +52,7 @@ def load_CIFAR10(root_path: Path) -> np.ndarray:
     """
     x_sets = []
     y_sets = []
-    for i in range(1,6):
+    for i in range(1,6): # for the batches 1 -> 5
 
         f = root_path.joinpath('data_batch_%d' % i)
         X, Y = load_CIFAR_batch(f)
@@ -80,6 +80,7 @@ def get_cifar_10_data(validation_size) -> np.ndarray:
     # create validation data from the test data sets
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = .02) # 1000 features from the train set
 
+    # one hot encodings for target class vectors
     y_train = to_categorical(y_train)
     y_test = to_categorical(y_test)
     y_val = to_categorical(y_val)
@@ -100,6 +101,7 @@ def normalize_cifar(xtrain, xtest, xval) -> np.ndarray:
     X_val = xval.astype('float32')
 
     # max pixel value is 255.0
+    # normalize data between [0,1]
     X_train /= 255.0
     X_test /= 255.0
     X_val /= 255.0
@@ -115,12 +117,13 @@ def plot_history(history):
     """
 
     fig, axs = plt.subplots(2)
+    plt.subplots_adjust(hspace = 0.5) # space the subplots apart
 
     # create accuracy sublpot
     axs[0].plot(history.history["accuracy"], label = "train accuracy")
-    axs[0].plot(history.history["val_accuracy"], label =" test accuracy")
+    axs[0].plot(history.history["val_accuracy"], label = "test accuracy")
     axs[0].set_ylabel("Accuracy")
-    axs[0].legend(loc="lower right")
+    axs[0].legend(loc = "lower right")
     axs[0].set_title("Accuracy eval")
 
     # create error sublpot
@@ -166,6 +169,7 @@ def build_cnn_model():
 
 
 def train_evaluate_model(batch_size: int, num_epochs: int):
+
     # unpickle all of the CIFAR data and convert to numpy arrays
     X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = .02)
     print('## Numpy Array Shapes ##')
@@ -176,35 +180,33 @@ def train_evaluate_model(batch_size: int, num_epochs: int):
     print('Validation data shape: ', X_val.shape)
     print('Validation labels shape: ', y_val.shape)
 
-    # normalize CIFAR data
-    X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
+    # # normalize CIFAR data
+    # X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
 
-    # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
-    import tensorflow as tf
-    physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    # # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
+    # import tensorflow as tf
+    # physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    # assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+    # config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-    """
-    training below here
-    """
-    # build the model with proper architecture
-    CNN_model = build_cnn_model()
+    # """
+    # training below here
+    # """
+    # # build the model with proper architecture
+    # CNN_model = build_cnn_model()
 
-    # train the model with validation data to fine tune parameters
-    history = CNN_model.fit(X_train, y_train, epochs = num_epochs, batch_size = batch_size, validation_data = (X_val, y_val))
+    # # train the model with validation data to fine tune parameters
+    # history = CNN_model.fit(X_train, y_train, epochs = num_epochs, batch_size = batch_size, validation_data = (X_val, y_val))
 
-    # evaluate model on test set
-    test_error, test_accuracy = CNN_model.evaluate(X_test, y_test)
-    print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
+    # # evaluate model on test set
+    # test_error, test_accuracy = CNN_model.evaluate(X_test, y_test)
+    # print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
 
-    plot_history(history)
-    CNN_model.save(SAVE_MODEL_PATH)
-    CNN_model.summary()
+    # plot_history(history)
+    # CNN_model.save(SAVE_MODEL_PATH)
+    # CNN_model.summary()
 
-
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', required = True, type = int,
                         help = 'The batch size for the CNN.')
@@ -215,11 +217,16 @@ if __name__ == "__main__":
     if args.batch_size is None:
         exit("Please provide batch size for CNN.")
         
-
     if args.epochs is None:
         exit("Please provide number of epochs to run model for.")
 
     train_evaluate_model(args.batch_size, args.epochs)
+
+
+if __name__ == "__main__":
+    main()
+
+
 
     # code to implement t-SNE on features from resulting model later
 

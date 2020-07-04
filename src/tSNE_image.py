@@ -18,7 +18,7 @@ def load_CIFAR_batch(file_name: Path) -> np.ndarray:
         datadict = pickle.load(f, encoding = 'bytes')
         X = datadict[b'data'] # image data in binary
         Y = datadict[b'labels'] # class labels i.e. the target classification
-        X = X.reshape(10000, 3072) # dimension of resulting numpy array in the 'data' part of the dictionary from load_pickle()
+        X = X.reshape(10000, 3072) # dimension of resulting flattened numpy array in the 'data' part of the dictionary from load_pickle()
         Y = np.array(Y)
 
         return X, Y
@@ -63,6 +63,7 @@ def get_CIFAR10_data():
 
     return X_train, y_train, X_test, y_test
 
+# flatten the data into data frames
 def pandify(xtrain: np.ndarray, ytrain: np.ndarray, xtest:np.ndarray, ytest: np.ndarray) -> pd.DataFrame:
     xtrain_df = pd.DataFrame(data = xtrain[0:, 0:],
                                 index = [i for i in range(xtrain.shape[0])], # rows
