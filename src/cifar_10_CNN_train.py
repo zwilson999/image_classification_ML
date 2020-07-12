@@ -11,8 +11,13 @@ from keras.layers import Conv2D
 from keras.layers import MaxPooling2D
 from keras.layers import Dense
 from keras.layers import Flatten
-from keras.optimizers import SGD
+from keras.layers import Dropout
+from keras.layers import BatchNormalization
+from keras.optimizers import SGD, Adam
 from keras.models import Model
+from keras.regularizers import l2
+from keras.callbacks import LearningRateScheduler
+from keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 from sklearn.manifold import TSNE
 
@@ -68,27 +73,6 @@ def load_CIFAR10(root_path: Path) -> np.ndarray:
     X_test, Y_test = load_CIFAR_batch(root_path.joinpath('test_batch')) # load test data from the test_batch file
     return X_train, Y_train, X_test, Y_test
 
-def get_cifar_10_data(validation_size) -> np.ndarray:
-    """
-    total data is 60000 images, so using 49000 for train, 1000 for dev and 10000 for test
-    """
-    # Load the raw CIFAR-10 data
-    cifar10_dir = Path('../data/raw/cifar-10-batches-py/').resolve()
-
-    X_train, y_train, X_test, y_test = load_CIFAR10(cifar10_dir)
-
-    # create validation data from the test data sets
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = .02) # 1000 features from the train set
-
-    # one hot encodings for target class vectors
-    y_train = to_categorical(y_train)
-    y_test = to_categorical(y_test)
-    y_val = to_categorical(y_val)
-
-
-    return X_train, y_train, X_test, y_test, X_val, y_val
-
-
 
 def normalize_cifar(xtrain, xtest, xval) -> np.ndarray:
 
@@ -100,15 +84,36 @@ def normalize_cifar(xtrain, xtest, xval) -> np.ndarray:
     X_test = xtest.astype('float32')
     X_val = xval.astype('float32')
 
-    # max pixel value is 255.0
-    # normalize data between [0,1]
-    X_train /= 255.0
-    X_test /= 255.0
-    X_val /= 255.0
+    # standardize data with z-score
+
+    mean = np.mean(X_train, axis = (0,1,2,3))
+    std_dev = np.std(X_train, axis = (0,1,2,3))
+    X_train = (X_train - mean) / std_dev + 1e-7
+    X_test = (X_test - mean) / (std_dev + 1e-7)
+    X_val = (X_val - mean) / (std_dev + 1e-7)
 
 
     return X_train, X_test, X_val
 
+def get_cifar_10_data(validation_size) -> np.ndarray:
+    """
+    total data is 60000 images, so using 49000 for train, 1000 for dev and 10000 for test
+    """
+    # Load the raw CIFAR-10 data
+    cifar10_dir = Path('../data/raw/cifar-10-batches-py/').resolve()
+
+    X_train, y_train, X_test, y_test = load_CIFAR10(cifar10_dir)
+
+    # create validation data from the test data sets
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size) # create a validation split for tuning parameters
+
+    # one hot encodings for target class vectors
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
+    y_val = to_categorical(y_val)
+
+
+    return X_train, y_train, X_test, y_test, X_val, y_val
 
 def plot_history(history):
     """Plots accuracy/loss for training/validation set as a function of the epochs
@@ -139,39 +144,10 @@ def plot_history(history):
     plt.show()
     plt.close()
     
-def build_cnn_model():
-
-    model = Sequential()
-
-    model.add(Conv2D(32, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding = 'same', input_shape = (32, 32, 3)))
-    model.add(Conv2D(32, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding = 'same'))
-    model.add(MaxPooling2D((2, 2)))
-
-    model.add(Conv2D(64, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding='same'))
-    model.add(Conv2D(64, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding='same'))
-    model.add(MaxPooling2D((2, 2)))
-
-    model.add(Conv2D(128, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding='same'))
-    model.add(Conv2D(128, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', padding='same'))
-    model.add(MaxPooling2D((2, 2)))
-
-
-    model.add(Flatten())
-    model.add(Dense(128, activation = 'relu', kernel_initializer = 'he_uniform'))
-    # output layer
-    model.add(Dense(10, activation = 'softmax'))
-
-    # compile model
-    opt = SGD(lr = 0.001, momentum = 0.9) # stochastic gradient descent optimizer
-    model.compile(optimizer = opt, loss = 'categorical_crossentropy', metrics = ['accuracy'])
-
-    return model
-
-
-def train_evaluate_model(batch_size: int, num_epochs: int):
+def pre_process_data():
 
     # unpickle all of the CIFAR data and convert to numpy arrays
-    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = .02)
+    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.20)
     print('## Numpy Array Shapes ##')
     print('Train data shape: ', X_train.shape)
     print('Train labels shape: ', y_train.shape)
@@ -180,31 +156,79 @@ def train_evaluate_model(batch_size: int, num_epochs: int):
     print('Validation data shape: ', X_val.shape)
     print('Validation labels shape: ', y_val.shape)
 
-    # normalize CIFAR data
     X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
 
-    # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
-    import tensorflow as tf
-    physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    return X_train, y_train, X_test, y_test, X_val, y_val
 
+def learning_rate_schedule(epoch):
+    learning_rate = 0.001
+    if epoch > 75:
+        learning_rate = 0.0005
+    if epoch > 100:
+        learning_rate = 0.0003
+    
+    return learning_rate
+
+def build_cnn_model():
     """
-    training below here
+    This is the CNN model's architecture
     """
-    # build the model with proper architecture
+    weight_decay = 1e-4
+    model = Sequential()
+    model.add(Conv2D(32, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding = 'same', input_shape = (32, 32, 3)))
+    model.add(BatchNormalization())
+    model.add(Conv2D(32, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding = 'same'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.2))
+
+    model.add(Conv2D(64, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    model.add(BatchNormalization())
+    model.add(Conv2D(64, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.3))
+
+    model.add(Conv2D(128, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    model.add(BatchNormalization())
+    model.add(Conv2D(128, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.4))
+
+    # model.add(Conv2D(256, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    # model.add(Conv2D(256, (3, 3), activation = 'relu', kernel_initializer = 'he_uniform', kernel_regularizer = l2(weight_decay), padding='same'))
+    # model.add(MaxPooling2D((2, 2)))
+
+    model.add(Flatten())
+    #model.add(Dense(128, activation = 'relu', kernel_initializer = 'he_uniform'))
+    # output layer
+    model.add(Dense(10, activation = 'softmax'))
+
+    # optimize and compile model
+    opt = Adam(learning_rate = 1e-3)
+    model.compile(optimizer = opt, loss = 'categorical_crossentropy', metrics = ['accuracy'])
+
+    return model
+
+def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_epochs: int):
+    """
+    train the model and save it to a model path that is set globally
+    """
+    # build the model with architecture
     CNN_model = build_cnn_model()
 
     # train the model with validation data to fine tune parameters
-    history = CNN_model.fit(X_train, y_train, epochs = num_epochs, batch_size = batch_size, validation_data = (X_val, y_val))
+    history = CNN_model.fit(xtrain, ytrain, epochs = num_epochs, batch_size = batch_size, validation_data = (xval, yval), callbacks = [LearningRateScheduler(learning_rate_schedule)])
 
     # evaluate model on test set
-    test_error, test_accuracy = CNN_model.evaluate(X_test, y_test)
+    test_error, test_accuracy = CNN_model.evaluate(xtest, ytest)
     print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
 
-    plot_history(history)
     CNN_model.save(SAVE_MODEL_PATH)
     CNN_model.summary()
+
+    return history
 
 def main():
     parser = argparse.ArgumentParser()
@@ -220,11 +244,27 @@ def main():
     if args.epochs is None:
         exit("Please provide number of epochs to run model for.")
 
-    train_evaluate_model(args.batch_size, args.epochs)
+    # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
+    import tensorflow as tf
+    physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
+    X_train, y_train, X_test, y_test, X_val, y_val = pre_process_data()
+    model_history = train_model(X_train, y_train, X_test, y_test, X_val, y_val ,args.batch_size, args.epochs)
+
+    # plot model error and accuracy over period of epochs
+    plot_history(model_history)
 
 if __name__ == "__main__":
     main()
+
+
+
+############################################################
+
+############################################################
+
 
 
 
