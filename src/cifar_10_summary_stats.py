@@ -2,6 +2,7 @@ import argparse
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
+import tempfile
 
 from pathlib import Path
 
@@ -67,7 +68,10 @@ def display_summary_stats(features: np.ndarray, labels: np.ndarray, batch_id: in
     print('Label - Label Id: {} Name: {}'.format(sample_label, label_names[sample_label]))
     
     plt.imshow(sample_image)
+    tmp = tempfile.NamedTemporaryFile() # create random file name for the image
+    plt.savefig('../images/for_prediction/' + tmp)
     plt.show()
+    tmp.close()
     # plot first 9 images
     for i in range(9):
         plt.subplot(330 + 1 + i)
