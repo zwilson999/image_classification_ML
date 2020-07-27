@@ -128,7 +128,7 @@ def plot_history(history):
         :return:
     """
 
-    fig, axs = plt.subplots(2)
+    _, axs = plt.subplots(2)
     plt.subplots_adjust(hspace = 0.5) # space the subplots apart
 
     # create accuracy sublpot
@@ -156,7 +156,7 @@ def plot_history(history):
 def pre_process_data():
 
     # unpickle all of the CIFAR data and convert to numpy arrays
-    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.02)
+    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.20)
     print('## Numpy Array Shapes ##')
     print('Train data shape: ', X_train.shape)
     print('Train labels shape: ', y_train.shape)
@@ -195,7 +195,7 @@ def build_cnn_model():
     """
     This is the CNN model's architecture
     """
-    weight_decay = 1e-4
+    weight_decay = 5e-4
     model = Sequential()
     model.add(Conv2D(32, (3, 3), activation = 'relu', kernel_initializer = 'he_normal', kernel_regularizer = l2(weight_decay), padding = 'same', input_shape = (32, 32, 3)))
     model.add(BatchNormalization())
@@ -223,14 +223,14 @@ def build_cnn_model():
     # model.add(MaxPooling2D((2, 2)))
 
     model.add(Flatten())
-    # model.add(Dense(128, activation='relu', kernel_initializer = 'he_normal', kernel_regularizer = l2(weight_decay)))
+    # model.add(Dense(128, acti vation='relu', kernel_initializer = 'he_normal', kernel_regularizer = l2(weight_decay)))
     # model.add(BatchNormalization())
     # model.add(Dropout(0.5))
     # output layer
     model.add(Dense(10, activation = 'softmax'))
 
     # optimize and compile model
-    opt = RMSprop(learning_rate = 1e-3)
+    opt = Adam(learning_rate = 1e-3)
     model.compile(optimizer = opt, loss = 'categorical_crossentropy', metrics = ['accuracy'])
 
     return model
