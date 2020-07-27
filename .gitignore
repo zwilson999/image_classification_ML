@@ -33,9 +33,13 @@ pyvenv.cfg
 
 # Data
 /data/*
+
+# Images
+/images/for_presentation/
+
+# Scripts
+/src/test.py
 /src/testing.py
-
-
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
