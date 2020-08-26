@@ -9,8 +9,12 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from time import time
 from pathlib import Path
+from PIL import Image
+from time import time
 
-
+'''
+This script is for visualizing subsets of the entire CIFAR10 dataset's raw features.
+'''
 
 def load_CIFAR_batch(file_name: Path) -> np.ndarray:
     """ load single batch of cifar """
@@ -112,7 +116,7 @@ def create_master_data(xtrain_df: pd.DataFrame, ytrain_df: pd.DataFrame, xtest_d
     master_df.label = [labels_dict[item] for item in master_df.label] # convert label integers to their proper string label
     #print(master_df.tail())
     #print(master_df.shape)
-    return master_df
+    return master_df, train_df, test_df
 
 def tSNE_image(master_data: pd.DataFrame, n_rows_selected: int, n_iterations: int, perplexities: list, learning_rate: float, 
                plots_output_path: Path, n_components: int = 2):
@@ -170,16 +174,14 @@ if __name__ == "__main__":
     print('Train labels shape: ', y_train_df.shape)
     print('Test data shape: ', x_test_df.shape)
     print('Test labels shape: ', y_test_df.shape)
-    #print(x_train_df.head())
-    #print(y_train_df.head())
 
-    # master_data_df = create_master_data(x_train_df, y_train_df, x_test_df, y_test_df)
+    master_data_df, train_df, test_df = create_master_data(x_train_df, y_train_df, x_test_df, y_test_df)
 
-    # perplexities = [5, 30, 50, 100]
+    perplexities = [5, 30, 50, 100]
 
-    # #the filepath where you want to save plots to on your local machine
-    # plot_output_path = Path("../data/processed/tSNE_plots").resolve()
+    #the filepath where you want to save plots to on your local machine
+    plot_output_path = Path("../data/processed/tSNE_plots").resolve()
 
-    # # run tSNE and save plots to output path
-
-    # tSNE_image(master_data_df, 5000, 5000, perplexities, 200, plot_output_path, 2)
+    # run tSNE and save plots to output path
+    #tSNE_image(test_df, 5000, 5000, perplexities)
+    tSNE_image(master_data_df, 5000, 5000, perplexities, 200, plot_output_path, 2)
