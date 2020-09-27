@@ -1,17 +1,21 @@
 import numpy as np
+import argparse
 import pickle
 import matplotlib.pyplot as plt
+import pandas as pd
 import argparse
 from keras.datasets import cifar10
 from keras.models import Model, load_model
 from keras.utils import to_categorical
 from pathlib import Path
-from PIL import Image
-from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc, roc_auc_score, confusion_matrix, classification_report
+from sklearn.preprocessing import label_binarize
 from datetime import datetime
 from time import time
 from typing import Tuple
+from itertools import cycle
+
 # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
 import tensorflow as tf
 physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -64,16 +68,16 @@ def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarr
     # create validation data from the test data sets
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size) # create a validation split for tuning parameters
     # one hot encodings for target class vectors
-    y_train = to_categorical(y_train)
-    y_test = to_categorical(y_test)
-    y_val = to_categorical(y_val)
+    #y_train = to_categorical(y_train)
+    #y_test = to_categorical(y_test)
+    #y_val = to_categorical(y_val)
 
     return X_train, y_train, X_test, y_test, X_val, y_val
 
 def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
 
     # unpickle all of the CIFAR data and convert to numpy arrays
-    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.10)
+    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.20)
     print('## Numpy Array Shapes ##')
     print('Train data shape: ', X_train.shape)
     print('Train labels shape: ', y_train.shape)
@@ -92,66 +96,72 @@ def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
 
     return X_test, y_test
 
-def tsne_image_from_pb(model_file_path: Path, xtest: np.ndarray):
-
+def assess_model_from_pb(model_file_path: Path, xtest: np.ndarray, ytest: np.ndarray, save_plot_path: Path):
     model = load_model(model_file_path)
-    feature_extractor = Model(inputs = model.inputs, outputs = model.get_layer('fc').output)
-    features = feature_extractor.predict(xtest, batch_size = 64)
-    print(features.shape)
+    feature_extractor = Model(inputs = model.inputs, outputs = model.get_layer('dense').output)
+    y_score = feature_extractor.predict(xtest, batch_size = 64) # one hot encoded softmax predictions
+    print(y_score.shape)
+    y_pred_labels = np.argmax(y_score, axis = 1) # take max softmax value to get the predicted class
+    #print(y_pred_labels.shape)
+    #print(ytest.shape)
+    ytest_binary = label_binarize(ytest, classes = [0,1,2,3,4,5,6,7,8,9])
+    #concat = np.concatenate((y_pred_labels.reshape(-1,1), ytest.reshape(-1,1)), axis = 1)
+    #print(concat.shape)
+    #df = pd.DataFrame(concat, columns = ['pred_labels', 'actual_labels'])
+    #df.to_csv(Path('../data/pred_df.csv'), index = False)
 
-    plots_output_path = Path('../data/processed/tSNE_plots')
-    perplexities = [5, 30, 50, 100]
-    for perplexity in perplexities:
-        print("Starting t-SNE on images now!")
-        print("Parameters are perplexity = {}".format(perplexity))
-        tsne = TSNE(n_components = 2, init = 'random', random_state = 0, perplexity = perplexity, learning_rate = 250, n_iter = 10000).fit_transform(features)
+    n_classes = y_score.shape[1]
+    class_labels = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck']
+    print(ytest.shape)
+    print(y_score.shape)
 
-        tx, ty = tsne[:,0], tsne[:,1]
-        tx = (tx-np.min(tx)) / (np.max(tx) - np.min(tx))
-        ty = (ty-np.min(ty)) / (np.max(ty) - np.min(ty))
-        # plot thumbnail version 
-        width = 4000
-        height = 3000
-        max_dim = 100
-        full_image = Image.new('RGB', (width, height))
-        for idx, x in enumerate(xtest):
-            tile = Image.fromarray(np.uint8(x * 255))
-            rs = max(1, tile.width / max_dim, tile.height / max_dim)
-            tile = tile.resize((int(tile.width / rs),
-                                int(tile.height / rs)),
-                            Image.ANTIALIAS)
-            full_image.paste(tile, (int((width-max_dim) * tx[idx]),
-                                    int((height-max_dim) * ty[idx])))
-        filename = "CNN_tsne_perplex%d_plot_thumbnail.png" % (perplexity)
-        fullpath = plots_output_path.joinpath(filename).resolve()
-        full_image.save(str(fullpath))
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(ytest_binary[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+    colors = cycle(['blue', 'red', 'green', 'brown', 'purple', 'pink', 'orange', 'black', 'yellow', 'cyan'])
+    for i, color, lbl in zip(range(n_classes), colors, class_labels):
+        plt.plot(fpr[i], tpr[i], color = color, lw = 1.5,
+        label = 'ROC Curve of class {0} (area = {1:0.2f})'.format(lbl, roc_auc[i]))
+    plt.plot([0, 1], [0, 1], 'k--', lw = 1.5)
+    plt.xlim([-0.05, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve for CIFAR-10 Multi-Class Data')
+    plt.legend(loc = 'lower right', prop = {'size': 6})
+    fullpath = save_plot_path.joinpath(save_plot_path.stem +'_roc_curve.png')
+    print(fullpath)
+    plt.savefig(fullpath)
+    plt.show()
 
-        # plot graphic version
-        _, (_, y_test) = cifar10.load_data()
-        y_test = np.asarray(y_test)
-        plt.figure(figsize = (16,12))
+    #print(y_pred_labels[1])
+    #print(ytest[1])
 
-        classes = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-        for i in range(len(classes)):
-            y_i = y_test == i
-            plt.scatter(tx[y_i[:, 0]], ty[y_i[:, 0]], label = classes[i])
-        plt.legend(loc=4)
-        plt.gca().invert_yaxis()
-        filename = "CNN_tsne_perplex%d_plot.png" % (perplexity)
-        fullpath = plots_output_path.joinpath(filename).resolve()
-        plt.title('tSNE on CIFAR10 Test Data w Perplexity = %d' %(perplexity))
-        plt.xlabel('dim1')
-        plt.ylabel('dim2')
-        plt.savefig(fullpath, bbox_inches='tight')
+    confuse_matrix = confusion_matrix(y_true = ytest, y_pred = y_pred_labels) # confusion matrix between the ytest and y_pred indices
+    class_report = classification_report(y_true = ytest, y_pred = y_pred_labels, target_names = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck'])
+    print(confuse_matrix)
+    print(class_report)
+
 
 def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_folder', required = True, type = Path,
                         help = 'The folder for the model you want to benchmark.')
+    parser.add_argument('--save_plot_path', required = False, type = Path,
+                        help = 'Path for saving plot of ROC Curve')
     args = parser.parse_args()
-    X_test, _ = pre_process_data()
-    tsne_image_from_pb(args.model_folder, X_test)
+
+    if args.save_plot_path is None:
+        args.save_plot_path = Path('../data/processed/roc_curves')
+
+    X_test, y_test = pre_process_data()
+    #pb_model_file = Path('../data/processed/saved_models/model3/').resolve()
+    # perform tSNE on our test data predictions
+    assess_model_from_pb(args.model_folder, X_test, y_test, args.save_plot_path)
 
 if __name__ == '__main__':
     main()

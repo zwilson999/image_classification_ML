@@ -1,4 +1,3 @@
-import os 
 import pickle
 import numpy as np
 import pandas as pd
@@ -7,31 +6,36 @@ import argparse
 
 from keras.utils import to_categorical
 from keras.models import Sequential
-from keras.layers import Conv2D
-from keras.layers import MaxPooling2D
-from keras.layers import Dense
-from keras.layers import Flatten
-from keras.layers import Dropout
-from keras.layers import BatchNormalization
-from keras.layers import Activation
+from keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, BatchNormalization, Activation
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.models import Model
 from keras.regularizers import l2
-from keras.callbacks import LearningRateScheduler
-from keras.callbacks import EarlyStopping
+from keras.callbacks import LearningRateScheduler, EarlyStopping
 from keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 from sklearn.manifold import TSNE
-
-from pathlib import Path
 from sklearn.model_selection import train_test_split
+from pathlib import Path
 from datetime import datetime
 from time import time
 from typing import Tuple
 
-# global set for saving the model path
-SAVE_MODEL_PATH = Path("../data/processed/saved_models").resolve()
+# set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
+import tensorflow as tf
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
+# seeding necessary for neural network reproducibility
+SEED = 123456
+import os
+import random as rn
+
+os.environ['PYTHONHASHSEED']=str(SEED)
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+rn.seed(SEED)
 
 """
 For model training, data needs to be in width x height x num_channels np.array format (3D image)
@@ -47,7 +51,6 @@ def load_CIFAR_batch(file_name: Path) -> Tuple[np.ndarray, np.ndarray]:
         datadict = pickle.load(f, encoding = 'bytes') # returns a dictionary with a 10000 x 3072 numpy array of uint8
         X = datadict[b'data'] # extract data
         Y = datadict[b'labels'] # extract class labels
-
         X = X.reshape((len(X), 3, 32, 32)).transpose(0, 2, 3, 1) # transpose along axis length (num_samples, width, height, num_channels) e.g. (50000 x 32 x 32 x 3)
         Y = np.array(Y)
         return X, Y
@@ -76,27 +79,12 @@ def normalize_cifar(xtrain, xtest, xval) -> Tuple[np.ndarray, np.ndarray, np.nda
     """
     Normalizing the images between [0,1]
     """
-
     X_train = xtrain.astype('float32')
     X_test = xtest.astype('float32')
     X_val = xval.astype('float32')
-
-    # standardize data with z-score
-    # train_mean = np.mean(X_train, axis = (0,1,2,3))
-    # test_mean = np.mean(X_test, axis = (0,1,2,3))
-    # val_mean = np.mean(X_val, axis = (0,1,2,3))
-    # train_std_dev = np.std(X_train, axis = (0,1,2,3))
-    # test_std_dev = np.std(X_test, axis = (0,1,2,3))
-    # val_std_dev = np.std(X_val, axis = (0,1,2,3))
-
-    # X_train = (X_train - train_mean) / (train_std_dev + 1e-7)
-    # X_test = (X_test - test_mean) / (test_std_dev + 1e-7)
-    # X_val = (X_val - val_mean) / (val_std_dev + 1e-7)
     X_train /= 255
     X_test /= 255
     X_val /= 255
-
-
     return X_train, X_test, X_val
 
 def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -108,22 +96,20 @@ def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarr
     X_train, y_train, X_test, y_test = load_CIFAR10(cifar10_dir)
 
     # create validation data from the test data sets
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size) # create a validation split for tuning parameters
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size, random_state = 123456) # create a validation split for tuning parameters
 
     # one hot encodings for target class vectors
     y_train = to_categorical(y_train)
     y_test = to_categorical(y_test)
     y_val = to_categorical(y_val)
 
-
     return X_train, y_train, X_test, y_test, X_val, y_val
 
-def plot_history(history):
+def plot_history(history, save_model_path: Path):
     """Plots accuracy/loss for training/validation set as a function of the epochs
         :param history: Training history of model
         :return:
     """
-
     _, axs = plt.subplots(2)
     plt.subplots_adjust(hspace = 0.5) # space the subplots apart
 
@@ -144,9 +130,9 @@ def plot_history(history):
     axs[1].set_title("Error eval")
     axs[1].grid()
 
-    output_path = Path("../data/processed/evaluation_plots")
-    plt.savefig(output_path.joinpath('validation_plot.png'))
-    plt.show()
+    output_path = save_model_path.joinpath(save_model_path.name + '.png')
+    plt.savefig(output_path)
+    #plt.show()
     plt.close()
     
 def pre_process_data(val_size: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -169,7 +155,7 @@ def pre_process_data(val_size: float) -> Tuple[np.ndarray, np.ndarray, np.ndarra
 
 def learning_rate_schedule(epoch) -> float:
     """Learning Rate Schedule
-    Learning rate is scheduled to be reduced after 80, 120, 160, 180 epochs.
+    Learning rate is scheduled to be reduced after 80 and 120 epochs.
     Called automatically every epoch as part of callbacks during training.
     # Arguments
         epoch (int): The number of epochs
@@ -177,16 +163,14 @@ def learning_rate_schedule(epoch) -> float:
         lr (float32): learning rate
     """
     lr = 1e-3
-    if epoch > 180:
-        lr *= 0.5e-3
-    elif epoch > 160:
-        lr *= 1e-3
-    elif epoch > 120:
-        #lr *= 5e-4
+    # if epoch > 135:
+    #     lr *= 1e-3
+    if epoch > 120:
+        #lr *= 3e-4
         lr *= 1e-2
     elif epoch > 80:
-        #lr *= 3e-4
-         lr *= 1e-1
+        #lr *= 5e-4
+        lr *= 1e-1
     return lr
 
 def build_cnn_model() -> Sequential:
@@ -228,7 +212,7 @@ def build_cnn_model() -> Sequential:
 
     return model
 
-def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_epochs: int):
+def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_epochs: int, save_model_path: Path):
     """
     train the model and save it to a model path that is set globally
     """
@@ -242,24 +226,25 @@ def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_e
         horizontal_flip = True
         #zoom_range = [0.5, 1.0] # half zoom to double zoom possibilities
     )
-    data_generator.fit(xtrain)
+    data_generator.fit(xtrain, seed = 123456)
     
-    # train the model with validation data to fine tune parameters
+    # train the model with validation data holdout set to assess early stopping criteria
     # history = CNN_model.fit(xtrain, ytrain, epochs = num_epochs, batch_size = batch_size, validation_data = (xval, yval), callbacks = [LearningRateScheduler(learning_rate_schedule)])
-    es = EarlyStopping(monitor = 'val_loss', mode = 'min', verbose = 1, patience = 100)
+    es = EarlyStopping(monitor = 'val_loss', mode = 'min', verbose = 1, patience = 20)
     start = datetime.now() # start of training
     history = CNN_model.fit(data_generator.flow(xtrain, ytrain, batch_size = batch_size), \
-                                                                          epochs = num_epochs, \
-                                                                          validation_data = (xval, yval), \
-                                                                          callbacks = [LearningRateScheduler(learning_rate_schedule), es])
+                                                                epochs = num_epochs, \
+                                                                validation_data = (xval, yval), \
+                                                                #callbacks = [es])
+                                                                callbacks = [LearningRateScheduler(learning_rate_schedule), es])
     end = datetime.now() - start
     print(end) # end of training
     # evaluate model on test set
     test_error, test_accuracy = CNN_model.evaluate(xtest, ytest)
     print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
-    tsne_image(CNN_model, xtest) # run tsne with the learned model
+    #tsne_image(CNN_model, xtest) # run tsne with the learned model
 
-    CNN_model.save(SAVE_MODEL_PATH)
+    CNN_model.save(save_model_path)
     CNN_model.summary()
 
     return history
@@ -307,7 +292,9 @@ def main():
     parser.add_argument('--epochs', required = True, type = int,
                         help = 'The number of epochs you would like to train for.')
     parser.add_argument('--val_size', required = True, type = float,
-                        help = 'The percent of samples used for validation (given as a decimal')
+                        help = 'The percent of samples used for validation (given as a decimal)')
+    parser.add_argument('--save_model_path', required = True, type = Path,
+                        help = 'The desired directory to save your model')
     args = parser.parse_args()
 
     if args.batch_size is None:
@@ -316,18 +303,13 @@ def main():
     if args.epochs is None:
         exit("Please provide number of epochs to run model for.")
 
-    # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
-    import tensorflow as tf
-    physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
+    
     X_train, y_train, X_test, y_test, X_val, y_val = pre_process_data(args.val_size)
-    model_history = train_model(X_train, y_train, X_test, y_test, X_val, y_val ,args.batch_size, args.epochs)
+    model_history = train_model(X_train, y_train, X_test, y_test, X_val, y_val ,args.batch_size, args.epochs, args.save_model_path)
     
 
     # plot model error and accuracy over period of epochs
-    plot_history(model_history)
+    plot_history(model_history, args.save_model_path)
 
 if __name__ == "__main__":
     main()
