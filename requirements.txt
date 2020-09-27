@@ -45,7 +45,7 @@ mistune==0.8.4
 nbconvert==5.6.1
 nbformat==5.0.7
 notebook==6.0.3
-numpy==1.19.0
+numpy==1.18.5
 oauthlib==3.1.0
 opt-einsum==3.2.1
 packaging==20.4
@@ -84,7 +84,9 @@ sklearn==0.0
 tensorboard==2.2.2
 tensorboard-plugin-wit==1.6.0.post3
 tensorflow==2.2.0
+tensorflow-determinism==0.3.0
 tensorflow-estimator==2.2.0
+tensorflow-gpu==2.2.0
 termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
