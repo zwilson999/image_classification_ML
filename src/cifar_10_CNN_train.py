@@ -30,7 +30,6 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 SEED = 123456
 import os
 import random as rn
-
 os.environ['PYTHONHASHSEED']=str(SEED)
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 np.random.seed(SEED)
@@ -43,7 +42,6 @@ width = 32
 height = 32
 num_channels(depth) = 3
 """
-
 
 def load_CIFAR_batch(file_name: Path) -> Tuple[np.ndarray, np.ndarray]:
     """ load single batch of cifar """
@@ -146,12 +144,8 @@ def pre_process_data(val_size: float) -> Tuple[np.ndarray, np.ndarray, np.ndarra
     print('Test labels shape: ', y_test.shape)
     print('Validation data shape: ', X_val.shape)
     print('Validation labels shape: ', y_val.shape)
-
     X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
-
     return X_train, y_train, X_test, y_test, X_val, y_val
-
-
 
 def learning_rate_schedule(epoch) -> float:
     """Learning Rate Schedule
@@ -212,7 +206,7 @@ def build_cnn_model() -> Sequential:
 
     return model
 
-def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_epochs: int, save_model_path: Path):
+def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_epochs: int, save_model_path: Path, tsne_flag: bool):
     """
     train the model and save it to a model path that is set globally
     """
@@ -242,16 +236,16 @@ def train_model(xtrain, ytrain, xtest, ytest, xval, yval, batch_size: int, num_e
     # evaluate model on test set
     test_error, test_accuracy = CNN_model.evaluate(xtest, ytest)
     print("Test error: {}, test accuracy: {}".format(test_error, test_accuracy))
-    #tsne_image(CNN_model, xtest) # run tsne with the learned model
 
+    if tsne_flag:
+        tsne_image(CNN_model, xtest) # optionally run tsne with the learned model
     CNN_model.save(save_model_path)
     CNN_model.summary()
-
     return history
 
 def tsne_image(CNN_model, X_test):
-    # code to implement t-SNE on features from resulting model later
 
+    # optional code to implement t-SNE on features from resulting model later
     feat_extractor = Model(inputs = CNN_model.input, outputs = CNN_model.get_layer('fc').output)
     features = feat_extractor.predict(X_test)
     print("Features matrix shape is: {}".format(features.shape))
@@ -279,11 +273,9 @@ def tsne_image(CNN_model, X_test):
                             Image.ANTIALIAS)
             full_image.paste(tile, (int((width-max_dim) * tx[idx]),
                                     int((height-max_dim) * ty[idx])))
-        
         filename = "CNN_tsne_perplex%d_plot.png" % (perplexity)
         fullpath = plots_output_path.joinpath(filename).resolve()
         full_image.save(str(fullpath))
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -293,8 +285,10 @@ def main():
                         help = 'The number of epochs you would like to train for.')
     parser.add_argument('--val_size', required = True, type = float,
                         help = 'The percent of samples used for validation (given as a decimal)')
-    parser.add_argument('--save_model_path', required = True, type = Path,
+    parser.add_argument('--save_model_path', required = False, type = Path,
                         help = 'The desired directory to save your model')
+    parser.add_argument('--tsne_flag', required = False, action = 'store_true',
+                        help = 'Use this flag to run a t-SNE analysis on the resulting trained CNN.')
     args = parser.parse_args()
 
     if args.batch_size is None:
@@ -303,17 +297,17 @@ def main():
     if args.epochs is None:
         exit("Please provide number of epochs to run model for.")
 
-    
-    X_train, y_train, X_test, y_test, X_val, y_val = pre_process_data(args.val_size)
-    model_history = train_model(X_train, y_train, X_test, y_test, X_val, y_val ,args.batch_size, args.epochs, args.save_model_path)
-    
+    if args.save_model_path is None:
+        args.save_model_path = Path('../data/processed/saved_models/')
 
+    X_train, y_train, X_test, y_test, X_val, y_val = pre_process_data(args.val_size)
+    model_history = train_model(X_train, y_train, X_test, y_test, X_val, y_val, args.batch_size, args.epochs, args.save_model_path, args.tsne_flag)
+    
     # plot model error and accuracy over period of epochs
     plot_history(model_history, args.save_model_path)
 
 if __name__ == "__main__":
     main()
-
 
     ###################################
     #validate sample has proper labels
