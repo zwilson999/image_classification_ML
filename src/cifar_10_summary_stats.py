@@ -4,10 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tempfile
 import random
-
 from pathlib import Path
-
-
 """
 Labels:
 0: airplane
@@ -21,8 +18,6 @@ Labels:
 8: ship
 9: truck
 """
-
-
 def load_label_names():
     """
     Provide Label names
@@ -73,8 +68,6 @@ def display_summary_stats(features: np.ndarray, labels: np.ndarray, batch_id: in
     plt.show()
     tmp.close()
 
-
-
 def display_grid_examples(features: np.ndarray, labels: np.ndarray):
     # randomly plot x images from the dataset batch in 3x3 grid
 
@@ -118,7 +111,6 @@ def main():
     # if sample_id isn't specified, choose a random one 
     if args.sample_id is None:
         args.sample_id = random.randint(0, 9999)
-
 
     # load data for grid only option, will either choose random batch or batch specified by the user, if specified
     if args.grid_only:

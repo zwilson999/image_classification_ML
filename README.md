@@ -21,12 +21,15 @@ The arguments to provide are:
 
 ```--save_model_path```: The path that you would like to save your model.pb file and other folders for loading later. Expects a path string.
 
+```--tsne_flag```: Optionally provide this flag to perform the tsne analysis right after training the model results and produce PIL based thumbnail plot of the images and according to their spatial t-SNE result.
+
 ```2. feature_extractor_tSNE.py```:
 
-This script will run an ```sklearn``` t-SNE analysis and provide a plot based on a prior model provided by ```cifar_10_CNN_train.py```
-By default, it will extract the penultimate dense later (before the classification layer) for the test data set and use these features as the high-dimensional data sent in to the t-SNE algorithm.
+This script will run an ```sklearn``` t-SNE analysis and provide 2 plots based on a prior model provided by ```cifar_10_CNN_train.py```. One plot will be a standard graphic image and the other will be a plot using the actual thumbnail images plotted on a black background using the ```PIL``` library.
+NOTE: By default, it will extract the penultimate dense later (before the classification layer) for the test data set and use these features as the high-dimensional data sent in to the t-SNE algorithm.
 
-The only argument needed is ```--model_folder``` which will take your pre-trained model and use it on the CIFAR-10 test data for feature extraction.
+One argument needed is ```--model_folder``` which will take your pre-trained model and use it on the CIFAR-10 test data for feature extraction.
+The other argument is used to specify where you would like save the produced plot files.
 
 ```3. model_assessment.py```:
 

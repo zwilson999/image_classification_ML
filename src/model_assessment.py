@@ -6,7 +6,6 @@ import pandas as pd
 import argparse
 from keras.datasets import cifar10
 from keras.models import Model, load_model
-from keras.utils import to_categorical
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc, roc_auc_score, confusion_matrix, classification_report
@@ -67,11 +66,6 @@ def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarr
     X_train, y_train, X_test, y_test = load_CIFAR10(cifar10_dir)
     # create validation data from the test data sets
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size) # create a validation split for tuning parameters
-    # one hot encodings for target class vectors
-    #y_train = to_categorical(y_train)
-    #y_test = to_categorical(y_test)
-    #y_val = to_categorical(y_val)
-
     return X_train, y_train, X_test, y_test, X_val, y_val
 
 def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
@@ -97,30 +91,32 @@ def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
     return X_test, y_test
 
 def assess_model_from_pb(model_file_path: Path, xtest: np.ndarray, ytest: np.ndarray, save_plot_path: Path):
-    model = load_model(model_file_path)
-    feature_extractor = Model(inputs = model.inputs, outputs = model.get_layer('dense').output)
+
+    model = load_model(model_file_path) # load model from filepath
+    feature_extractor = Model(inputs = model.inputs, outputs = model.get_layer('dense').output) # extract dense output layer (will be softmax probabilities)
     y_score = feature_extractor.predict(xtest, batch_size = 64) # one hot encoded softmax predictions
     print(y_score.shape)
+    print(y_score[0:5])
     y_pred_labels = np.argmax(y_score, axis = 1) # take max softmax value to get the predicted class
-    #print(y_pred_labels.shape)
-    #print(ytest.shape)
-    ytest_binary = label_binarize(ytest, classes = [0,1,2,3,4,5,6,7,8,9])
-    #concat = np.concatenate((y_pred_labels.reshape(-1,1), ytest.reshape(-1,1)), axis = 1)
-    #print(concat.shape)
-    #df = pd.DataFrame(concat, columns = ['pred_labels', 'actual_labels'])
-    #df.to_csv(Path('../data/pred_df.csv'), index = False)
+    ytest_binary = label_binarize(ytest, classes = [0,1,2,3,4,5,6,7,8,9]) # one hot encode the test data true labels
+
+    ###############FOR MANUAL CHECKING individual image results##########
+    concat = np.concatenate((y_pred_labels.reshape(-1,1), ytest.reshape(-1,1)), axis = 1)
+    df = pd.DataFrame(concat, columns = ['pred_labels', 'actual_labels'])
+    df.to_csv(Path('../data/pred_df.csv'), index = False)
+    #####################################################################
 
     n_classes = y_score.shape[1]
     class_labels = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck']
-    print(ytest.shape)
-    print(y_score.shape)
 
     fpr = dict()
     tpr = dict()
     roc_auc = dict()
+    # compute fpr and tpr with roc_curve from the ytest true labels to the scores
     for i in range(n_classes):
         fpr[i], tpr[i], _ = roc_curve(ytest_binary[:, i], y_score[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
+    # plot each class  curve on single graph for multi-class one vs all classification
     colors = cycle(['blue', 'red', 'green', 'brown', 'purple', 'pink', 'orange', 'black', 'yellow', 'cyan'])
     for i, color, lbl in zip(range(n_classes), colors, class_labels):
         plt.plot(fpr[i], tpr[i], color = color, lw = 1.5,
@@ -133,21 +129,16 @@ def assess_model_from_pb(model_file_path: Path, xtest: np.ndarray, ytest: np.nda
     plt.title('ROC Curve for CIFAR-10 Multi-Class Data')
     plt.legend(loc = 'lower right', prop = {'size': 6})
     fullpath = save_plot_path.joinpath(save_plot_path.stem +'_roc_curve.png')
-    print(fullpath)
     plt.savefig(fullpath)
     plt.show()
 
-    #print(y_pred_labels[1])
-    #print(ytest[1])
-
+    # get confusion matrix and classification report for precision, recall, f1score at the class level
     confuse_matrix = confusion_matrix(y_true = ytest, y_pred = y_pred_labels) # confusion matrix between the ytest and y_pred indices
-    class_report = classification_report(y_true = ytest, y_pred = y_pred_labels, target_names = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck'])
+    class_report = classification_report(y_true = ytest, y_pred = y_pred_labels, target_names = class_labels)
     print(confuse_matrix)
     print(class_report)
 
-
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_folder', required = True, type = Path,
                         help = 'The folder for the model you want to benchmark.')
@@ -157,10 +148,9 @@ def main():
 
     if args.save_plot_path is None:
         args.save_plot_path = Path('../data/processed/roc_curves')
-
     X_test, y_test = pre_process_data()
-    #pb_model_file = Path('../data/processed/saved_models/model3/').resolve()
-    # perform tSNE on our test data predictions
+
+    # get classification metrics on our test data predictions
     assess_model_from_pb(args.model_folder, X_test, y_test, args.save_plot_path)
 
 if __name__ == '__main__':

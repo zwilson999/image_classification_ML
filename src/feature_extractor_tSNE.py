@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from datetime import datetime
 from time import time
 from typing import Tuple
+
 # set this to allow memory growth on your GPU, otherwise, CUDNN may not initialize
 import tensorflow as tf
 physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -30,7 +31,6 @@ def load_CIFAR_batch(file_name: Path) -> Tuple[np.ndarray, np.ndarray]:
         datadict = pickle.load(f, encoding = 'bytes') # returns a dictionary with a 10000 x 3072 numpy array of uint8
         X = datadict[b'data'] # extract data
         Y = datadict[b'labels'] # extract class labels
-
         X = X.reshape((len(X), 3, 32, 32)).transpose(0, 2, 3, 1) # transpose along axis length (num_samples, width, height, num_channels) e.g. (50000 x 32 x 32 x 3)
         Y = np.array(Y)
         return X, Y
@@ -73,7 +73,7 @@ def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarr
 def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
 
     # unpickle all of the CIFAR data and convert to numpy arrays
-    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.10)
+    X_train, y_train, X_test, y_test, X_val, y_val = get_cifar_10_data(validation_size = 0.20)
     print('## Numpy Array Shapes ##')
     print('Train data shape: ', X_train.shape)
     print('Train labels shape: ', y_train.shape)
@@ -92,14 +92,13 @@ def pre_process_data() -> Tuple[np.ndarray, np.ndarray]:
 
     return X_test, y_test
 
-def tsne_image_from_pb(model_file_path: Path, xtest: np.ndarray):
+def tsne_image_from_pb(model_file_path: Path, xtest: np.ndarray, save_image_path: Path):
 
     model = load_model(model_file_path)
     feature_extractor = Model(inputs = model.inputs, outputs = model.get_layer('fc').output)
     features = feature_extractor.predict(xtest, batch_size = 64)
     print(features.shape)
 
-    plots_output_path = Path('../data/processed/tSNE_plots')
     perplexities = [5, 30, 50, 100]
     for perplexity in perplexities:
         print("Starting t-SNE on images now!")
@@ -123,11 +122,11 @@ def tsne_image_from_pb(model_file_path: Path, xtest: np.ndarray):
             full_image.paste(tile, (int((width-max_dim) * tx[idx]),
                                     int((height-max_dim) * ty[idx])))
         filename = "CNN_tsne_perplex%d_plot_thumbnail.png" % (perplexity)
-        fullpath = plots_output_path.joinpath(filename).resolve()
+        fullpath = save_image_path.joinpath(filename).resolve()
         full_image.save(str(fullpath))
 
         # plot graphic version
-        _, (_, y_test) = cifar10.load_data()
+        _, (_, y_test) = cifar10.load_data() # load built-in CIFAR-10 data for simplicity
         y_test = np.asarray(y_test)
         plt.figure(figsize = (16,12))
 
@@ -138,7 +137,7 @@ def tsne_image_from_pb(model_file_path: Path, xtest: np.ndarray):
         plt.legend(loc=4)
         plt.gca().invert_yaxis()
         filename = "CNN_tsne_perplex%d_plot.png" % (perplexity)
-        fullpath = plots_output_path.joinpath(filename).resolve()
+        fullpath = save_image_path.joinpath(filename).resolve()
         plt.title('tSNE on CIFAR10 Test Data w Perplexity = %d' %(perplexity))
         plt.xlabel('dim1')
         plt.ylabel('dim2')
@@ -149,9 +148,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_folder', required = True, type = Path,
                         help = 'The folder for the model you want to benchmark.')
+    parser.add_argument('--save_image_path', required = False, type = Path,
+                        help = 'The path to save the t-SNE images')
     args = parser.parse_args()
+
+    if args.save_image_path is None:
+        args.save_image_path = Path('../data/processed/tSNE_plots')
+
     X_test, _ = pre_process_data()
-    tsne_image_from_pb(args.model_folder, X_test)
+    tsne_image_from_pb(args.model_folder, X_test, args.save_image_path)
 
 if __name__ == '__main__':
     main()
