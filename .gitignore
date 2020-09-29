@@ -43,6 +43,8 @@ pyvenv.cfg
 /src/testing.py
 /src/tsne_image_test_data.py
 /src/import_pb_to_tensorboard.py
+/src/tSNE_image_thumbnail.py
+/src/tSNE_image.py
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
