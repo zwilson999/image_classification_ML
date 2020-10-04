@@ -87,7 +87,7 @@ def normalize_cifar(xtrain, xtest, xval) -> Tuple[np.ndarray, np.ndarray, np.nda
 
 def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    total data is 60000 images, so using 49000 for train, 1000 for dev and 10000 for test
+    total data is 60000 images, perform split according to provided validation_size here. Test Data will be 10000 images
     """
     # Load the raw CIFAR-10 data
     cifar10_dir = Path('../data/raw/cifar-10-batches-py/').resolve()
@@ -95,6 +95,14 @@ def get_cifar_10_data(validation_size) -> Tuple[np.ndarray, np.ndarray, np.ndarr
 
     # create validation data from the test data sets
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = validation_size, random_state = 123456) # create a validation split for tuning parameters
+    
+    train_unique_elements, train_counts_elements = np.unique(y_train, return_counts = True)
+    val_unique_elements, val_counts_elements = np.unique(y_val, return_counts = True)
+    test_unique_elements, test_counts_elements = np.unique(y_test, return_counts = True)
+
+    print("Train Unique Elements: {}".format(np.asarray((train_unique_elements, train_counts_elements))))
+    print("Val Unique Elements: {}".format(np.asarray((val_unique_elements, val_counts_elements))))
+    print("Test Unique Elements: {}".format(np.asarray((test_unique_elements, test_counts_elements))))
 
     # one hot encodings for target class vectors
     y_train = to_categorical(y_train)
@@ -145,6 +153,8 @@ def pre_process_data(val_size: float) -> Tuple[np.ndarray, np.ndarray, np.ndarra
     print('Validation data shape: ', X_val.shape)
     print('Validation labels shape: ', y_val.shape)
     X_train, X_test, X_val = normalize_cifar(X_train, X_test, X_val)
+
+
     return X_train, y_train, X_test, y_test, X_val, y_val
 
 def learning_rate_schedule(epoch) -> float:
