@@ -2,14 +2,16 @@ import numpy as np
 import argparse
 import pickle
 import matplotlib.pyplot as plt
-import pandas as pd
+#import pandas as pd
 import argparse
+import matplotlib.cm as cm
 from keras.datasets import cifar10
 from keras.models import Model, load_model
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_curve, auc, roc_auc_score, confusion_matrix, classification_report, precision_recall_curve, average_precision_score
+from sklearn.metrics import roc_curve, auc, f1_score, roc_auc_score, confusion_matrix, classification_report, precision_recall_curve, average_precision_score, ConfusionMatrixDisplay
 from sklearn.preprocessing import label_binarize
+from matplotlib.colors import Normalize
 from datetime import datetime
 from time import time
 from typing import Tuple
@@ -186,18 +188,58 @@ def assess_roc(model, xtrain: np.ndarray, ytrain: np.ndarray, xval: np.ndarray, 
     plt.close()
 
     # get confusion matrix and classification report for precision, recall, f1score at the class level
+    
     train_confuse_matrix = confusion_matrix(y_true = ytrain, y_pred = y_train_pred_labels)
     train_class_report = classification_report(y_true = ytrain, y_pred = y_train_pred_labels, target_names = class_labels)
     val_confuse_matrix = confusion_matrix(y_true = yval, y_pred = y_val_pred_labels)
     val_class_report = classification_report(y_true = yval, y_pred = y_val_pred_labels, target_names = class_labels)
     test_confuse_matrix = confusion_matrix(y_true = ytest, y_pred = y_test_pred_labels) # confusion matrix between the ytest and y_pred indices
     test_class_report = classification_report(y_true = ytest, y_pred = y_test_pred_labels, target_names = class_labels)
-    print(train_confuse_matrix)
+
+
+    # plot and save confusion matrices
+    train_cm_display = ConfusionMatrixDisplay(train_confuse_matrix, display_labels = class_labels)
+    train_cm_display.plot(cmap = 'Greens')
+    fullpath = save_plot_path.joinpath('train_confusion_matrix.png')
+    plt.title("Train Confusion Matrix")
+    plt.xticks(range(len(class_labels)), class_labels, rotation = 90) # rotate x labels
+    plt.yticks(range(len(class_labels)), class_labels) 
+    plt.savefig(fullpath, bbox_inches = "tight")
+    plt.clf()
+
+    val_cm_display = ConfusionMatrixDisplay(val_confuse_matrix, display_labels = class_labels)
+    val_cm_display.plot(cmap = "Greens") # greens color map
+    fullpath = save_plot_path.joinpath('val_confusion_matrix.png')
+    plt.title("Validation Confusion Matrix")
+    plt.xticks(range(len(class_labels)), class_labels, rotation = 90) # rotate x labels
+    plt.yticks(range(len(class_labels)), class_labels)
+    plt.savefig(fullpath, bbox_inches = "tight")
+    plt.clf()
+
+    test_cm_display = ConfusionMatrixDisplay(test_confuse_matrix, display_labels = class_labels)
+    test_cm_display.plot(cmap = 'Greens')
+    fullpath = save_plot_path.joinpath('test_confusion_matrix.png')
+    plt.title("Test Confusion Matrix")
+    plt.xticks(range(len(class_labels)), class_labels, rotation = 90) # rotate x labels
+    plt.yticks(range(len(class_labels)), class_labels)
+    plt.savefig(fullpath, bbox_inches = "tight")
+    plt.clf()
+
     print(train_class_report)
-    print(val_confuse_matrix)
     print(val_class_report)
-    print(test_confuse_matrix)
-    print(test_class_report)    
+    print(test_class_report)
+
+def plot_f1_score_curve():
+    """
+    Generate iso-f1 scores per sklearn documentation for showing  f1 cutoffs on PRCs
+    """
+
+    f_scores = np.linspace(0.2, 0.8, num = 4)
+    for f_score in f_scores:
+        x = np.linspace(0.01, 1)
+        y = f_score * x / (2 * x - f_score)
+        plt.plot(x[y >= 0], y[y >= 0], color = 'gray', alpha = 0.2)
+        plt.annotate('f1 = {0:0.1f}'.format(f_score), xy = (0.7, y[49] + 0.02))
 
 def assess_pr_curve(model, xtrain: np.ndarray, ytrain: np.ndarray, xval: np.ndarray, yval: np.ndarray, xtest: np.ndarray, ytest: np.ndarray, 
                     save_plot_path: Path, n_classes: int, class_labels: list):
@@ -220,68 +262,79 @@ def assess_pr_curve(model, xtrain: np.ndarray, ytrain: np.ndarray, xval: np.ndar
     train_precision = dict()
     train_recall = dict()
     train_avg_precision = dict()
+    train_pr_auc = dict()
 
     val_precision = dict()
     val_recall = dict()
     val_avg_precision = dict()
+    val_pr_auc = dict()
 
     test_precision = dict()
     test_recall = dict()
     test_avg_precision = dict()
+    test_pr_auc = dict()
 
     for i in range(n_classes):
         train_precision[i], train_recall[i], _ = precision_recall_curve(y_train_binary[:, i], y_train_score[:, i])
         train_avg_precision[i] = average_precision_score(y_train_binary[:, i], y_train_score[:, i])
+        train_pr_auc[i] = auc(train_recall[i], train_precision[i])
+
         val_precision[i], val_recall[i], _ = precision_recall_curve(y_val_binary[:, i], y_val_score[:, i])
         val_avg_precision[i] = average_precision_score(y_val_binary[:, i], y_val_score[:, i])
+        val_pr_auc[i] = auc(val_recall[i], val_precision[i])
+
         test_precision[i], test_recall[i], _ = precision_recall_curve(y_test_binary[:, i], y_test_score[:, i])
         test_avg_precision[i] = average_precision_score(y_test_binary[:, i], y_test_score[:, i])
+        test_pr_auc[i] = auc(test_recall[i], test_precision[i])
 
     colors = cycle(['blue', 'red', 'green', 'brown', 'purple', 'pink', 'orange', 'black', 'yellow', 'cyan'])
 
     # plot each class curve on single graph for multi-class one vs all classification
+    plot_f1_score_curve()
     for i, color, lbl in zip(range(n_classes), colors, class_labels):
         plt.plot(train_recall[i], train_precision[i], color = color, lw = 2,
-        label = 'P/R Curve of class {0} (avg = {1:0.3f})'.format(lbl, train_avg_precision[i]))
-    plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
+        label = 'P/R Curve of class {0} (AUC = {1:0.3f})'.format(lbl, train_pr_auc[i]))
+    #plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
     plt.xlim([-0.02, 1.03])
     plt.ylim([-0.03, 1.05])
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.title('Train P/R Curve for CIFAR-10 Multi-Class Data')
     plt.legend(loc = 'center left', prop = {'size': 6})
-    fullpath = save_plot_path.joinpath('train_pr_curve.png')
+    fullpath = save_plot_path.joinpath('train_pr_curve_AUC.png')
     plt.savefig(fullpath)
     plt.close()
 
 
     # plot each class curve on single graph for multi-class one vs all classification
+    plot_f1_score_curve()
     for i, color, lbl in zip(range(n_classes), colors, class_labels):
         plt.plot(val_recall[i], val_precision[i], color = color, lw = 2,
-        label = 'P/R Curve of class {0} (avg = {1:0.3f})'.format(lbl, val_avg_precision[i]))
-    plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
+        label = 'P/R Curve of class {0} (AUC = {1:0.3f})'.format(lbl, val_pr_auc[i]))
+    #plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
     plt.xlim([-0.02, 1.03])
     plt.ylim([-0.03, 1.05])
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.title('Validation P/R Curve CIFAR-10 Multi-Class Data')
     plt.legend(loc = 'center left', prop = {'size': 6})
-    fullpath = save_plot_path.joinpath('val_pr_curve.png')
+    fullpath = save_plot_path.joinpath('val_pr_curve_AUC.png')
     plt.savefig(fullpath)
     plt.close()
 
     # plot each class curve on single graph for multi-class one vs all classification
+    plot_f1_score_curve()
     for i, color, lbl in zip(range(n_classes), colors, class_labels):
         plt.plot(test_recall[i], test_precision[i], color = color, lw = 2,
-        label = 'P/R Curve of class {0} (avg = {1:0.3f})'.format(lbl, test_avg_precision[i]))
-    plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
+        label = 'P/R Curve of class {0} (AUC = {1:0.3f})'.format(lbl, test_pr_auc[i]))
+    #plt.hlines(0, xmin = -0.02, xmax = 1.0, linestyle = 'dashed')
     plt.xlim([-0.02, 1.03])
     plt.ylim([-0.03, 1.05])
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.title('Test P/R Curve for CIFAR-10 Multi-Class Data')
     plt.legend(loc = 'center left', prop = {'size': 6})
-    fullpath = save_plot_path.joinpath('test_pr_curve.png')
+    fullpath = save_plot_path.joinpath('test_pr_curve_AUC.png')
     plt.savefig(fullpath)
     plt.close()
     
@@ -294,7 +347,7 @@ def main():
     args = parser.parse_args()
 
     if args.save_plot_path is None:
-        args.save_plot_path = Path('../data/processed/roc_curves')
+        args.save_plot_path = Path('../data/processed/plots')
     X_train, y_train, X_val, y_val, X_test, y_test = pre_process_data()
     
     class_labels = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
